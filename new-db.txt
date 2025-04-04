@@ -1,0 +1,226 @@
+CREATE DATABASE ExamSystem;
+USE ExamSystem;
+
+-- Address Table
+CREATE TABLE Address (
+    add_id INT PRIMARY KEY AUTO_INCREMENT,
+    state VARCHAR(50) NOT NULL,
+    city VARCHAR(50) NOT NULL,
+    pin VARCHAR(10) NOT NULL
+);
+
+-- Course Table
+CREATE TABLE Course (
+    course_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50) NOT NULL,
+    year INT NOT NULL,
+    semester INT NOT NULL
+);
+
+-- Subject Table
+CREATE TABLE Subject (
+    sub_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50) NOT NULL
+);
+
+-- Course_Sub Table (Many-to-Many Relationship between Course and Subject)
+CREATE TABLE Course_Sub (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    sub_id INT NOT NULL,
+    course_id INT NOT NULL,
+    FOREIGN KEY (sub_id) REFERENCES Subject(sub_id) ON DELETE CASCADE,
+    FOREIGN KEY (course_id) REFERENCES Course(course_id) ON DELETE CASCADE
+);
+
+-- Teacher Table
+CREATE TABLE Teacher (
+    teacher_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    phno VARCHAR(15) UNIQUE NOT NULL,
+    usrnm VARCHAR(50) UNIQUE NOT NULL,
+    paswrd VARCHAR(255) NOT NULL,
+    idcard BLOB
+);
+
+-- Student Table
+CREATE TABLE Student (
+    stu_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    qualification VARCHAR(50) NOT NULL,
+    dob DATE NOT NULL,
+    course_id INT NOT NULL,
+    add_id INT NOT NULL,
+    phno VARCHAR(15) UNIQUE NOT NULL,
+    usrnm VARCHAR(50) UNIQUE NOT NULL,
+    paswrd VARCHAR(255) NOT NULL,
+    idcard BLOB,
+    FOREIGN KEY (course_id) REFERENCES Course(course_id) ON DELETE CASCADE,
+    FOREIGN KEY (add_id) REFERENCES Address(add_id) ON DELETE CASCADE
+);
+
+-- Exam Table
+CREATE TABLE Exam (
+    exam_id INT PRIMARY KEY AUTO_INCREMENT,
+    exam_name VARCHAR(100) NOT NULL,
+    exam_course INT NOT NULL,
+    exam_subject INT NOT NULL,
+    created_by INT NOT NULL,
+    FOREIGN KEY (exam_course) REFERENCES Course(course_id) ON DELETE CASCADE,
+    FOREIGN KEY (exam_subject) REFERENCES Subject(sub_id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES Teacher(teacher_id) ON DELETE CASCADE
+);
+
+-- Question Table
+CREATE TABLE Question (
+    ques_id INT PRIMARY KEY AUTO_INCREMENT,
+    ques_text TEXT NOT NULL
+);
+
+-- Option Table (Renamed to QuestionOption to avoid conflicts with reserved words)
+CREATE TABLE QuestionOption (
+    option_id INT PRIMARY KEY AUTO_INCREMENT,
+    option_text TEXT NOT NULL
+);
+
+-- Question-Answer Mapping Table
+CREATE TABLE ques_ans_map (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    ques_id INT NOT NULL,
+    option_id INT NOT NULL,
+    is_correct TINYINT(1) NOT NULL, -- Boolean alternative for MySQL
+    FOREIGN KEY (ques_id) REFERENCES Question(ques_id) ON DELETE CASCADE,
+    FOREIGN KEY (option_id) REFERENCES QuestionOption(option_id) ON DELETE CASCADE
+);
+
+-- Student Exam Table
+CREATE TABLE student_exam (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    stu_id INT NOT NULL,
+    exam_id INT NOT NULL,
+    AttemptDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (stu_id) REFERENCES Student(stu_id) ON DELETE CASCADE,
+    FOREIGN KEY (exam_id) REFERENCES Exam(exam_id) ON DELETE CASCADE
+);
+
+-- Student Result Table
+CREATE TABLE student_result (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    stu_id INT NOT NULL,
+    exam_id INT NOT NULL,
+    score INT CHECK (score >= 0),
+    createdate DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (stu_id) REFERENCES Student(stu_id) ON DELETE CASCADE,
+    FOREIGN KEY (exam_id) REFERENCES Exam(exam_id) ON DELETE CASCADE
+);
+
+-- Student Answer Table
+CREATE TABLE student_ans (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    stu_id INT NOT NULL,
+    exam_id INT NOT NULL,
+    ques_id INT NOT NULL,
+    ans_id INT NOT NULL,
+    is_correct TINYINT(1) NOT NULL,
+    FOREIGN KEY (stu_id) REFERENCES Student(stu_id) ON DELETE CASCADE,
+    FOREIGN KEY (exam_id) REFERENCES Exam(exam_id) ON DELETE CASCADE,
+    FOREIGN KEY (ques_id) REFERENCES Question(ques_id) ON DELETE CASCADE,
+    FOREIGN KEY (ans_id) REFERENCES QuestionOption(option_id) ON DELETE CASCADE
+);
+
+-- Stored Procedure to Register a Teacher
+DELIMITER $$
+CREATE PROCEDURE RegisterTeacher (
+    IN p_name VARCHAR(100),
+    IN p_email VARCHAR(100),
+    IN p_phno VARCHAR(15),
+    IN p_usrnm VARCHAR(50),
+    IN p_paswrd VARCHAR(255)
+)
+BEGIN
+    INSERT INTO Teacher (name, email, phno, usrnm, paswrd)
+    VALUES (p_name, p_email, p_phno, p_usrnm, p_paswrd);
+END $$
+DELIMITER ;
+
+-- Stored Procedure to Register a Student
+DELIMITER $$
+CREATE PROCEDURE RegisterStudent (
+    IN p_name VARCHAR(100),
+    IN p_qualification VARCHAR(50),
+    IN p_dob DATE,
+    IN p_course_id INT,
+    IN p_add_id INT,
+    IN p_phno VARCHAR(15),
+    IN p_usrnm VARCHAR(50),
+    IN p_paswrd VARCHAR(255)
+)
+BEGIN
+    INSERT INTO Student (name, qualification, dob, course_id, add_id, phno, usrnm, paswrd)
+    VALUES (p_name, p_qualification, p_dob, p_course_id, p_add_id, p_phno, p_usrnm, p_paswrd);
+END $$
+DELIMITER ;
+
+-- Stored Procedure to Create an Exam
+DELIMITER $$
+CREATE PROCEDURE CreateExam (
+    IN p_exam_name VARCHAR(100),
+    IN p_exam_course INT,
+    IN p_exam_subject INT,
+    IN p_created_by INT
+)
+BEGIN
+    INSERT INTO Exam (exam_name, exam_course, exam_subject, created_by)
+    VALUES (p_exam_name, p_exam_course, p_exam_subject, p_created_by);
+END $$
+DELIMITER ;
+
+-- Stored Procedure for a Student to Attempt an Exam
+DELIMITER $$
+CREATE PROCEDURE AttemptExam (
+    IN p_stu_id INT,
+    IN p_exam_id INT
+)
+BEGIN
+    INSERT INTO student_exam (stu_id, exam_id, AttemptDate)
+    VALUES (p_stu_id, p_exam_id, NOW());
+END $$
+DELIMITER ;
+
+-- Stored Procedure to Save Exam Results Using Temp Table
+DELIMITER $$
+CREATE PROCEDURE SaveExamResult (
+    IN p_stu_id INT,
+    IN p_exam_id INT
+)
+BEGIN
+    IF NOT EXISTS (SELECT * FROM student_ans WHERE stu_id = p_stu_id AND exam_id = p_exam_id) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'No answers found for this student in the given exam';
+    END IF;
+
+    CREATE TEMPORARY TABLE IF NOT EXISTS TempResults AS (
+        SELECT sa.stu_id, sa.exam_id, COUNT(sa.is_correct) AS score
+        FROM student_ans sa
+        WHERE sa.stu_id = p_stu_id AND sa.exam_id = p_exam_id AND sa.is_correct = 1
+    );
+
+    INSERT INTO student_result (stu_id, exam_id, score, createdate)
+    SELECT stu_id, exam_id, score, NOW() FROM TempResults;
+
+    DROP TEMPORARY TABLE IF EXISTS TempResults;
+END $$
+DELIMITER ;
+
+-- Stored Procedures to Get All Students and Results
+DELIMITER $$
+CREATE PROCEDURE GetAllStudents()
+BEGIN
+    SELECT * FROM Student;
+END $$
+
+CREATE PROCEDURE GetAllResults()
+BEGIN
+    SELECT * FROM student_result;
+END $$
+DELIMITER ;

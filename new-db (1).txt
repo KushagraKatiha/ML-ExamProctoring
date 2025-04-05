@@ -1,0 +1,284 @@
+-- DROP DATABASE IF EXISTS ExamSystem;
+CREATE DATABASE IF NOT EXISTS ExamSystem;
+USE ExamSystem;
+
+-- Address Table
+CREATE TABLE Address (
+    add_id INT PRIMARY KEY AUTO_INCREMENT,
+    state VARCHAR(50),
+    city VARCHAR(50),
+    pin INT
+);
+
+-- Course Table
+CREATE TABLE Course (
+    course_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50),
+    year INT,
+    semester INT
+);
+
+-- Subject Table
+CREATE TABLE Subject (
+    sub_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50)
+);
+
+-- Course_Sub Table (Many-to-Many)
+CREATE TABLE Course_Sub (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    sub_id INT,
+    course_id INT,
+    FOREIGN KEY (sub_id) REFERENCES Subject(sub_id),
+    FOREIGN KEY (course_id) REFERENCES Course(course_id)
+);
+
+-- Teacher Table
+CREATE TABLE Teacher (
+    teacher_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50),
+    email VARCHAR(50),
+    phno VARCHAR(20),
+    usrnm VARCHAR(20),
+    paswrd VARCHAR(20),
+    idcard BLOB
+);
+
+-- Student Table
+CREATE TABLE Student (
+    stu_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50),
+    qualification VARCHAR(50),
+    dob DATE,
+    course_id INT,
+    add_id INT,
+    phno VARCHAR(20),
+    usrnm VARCHAR(20),
+    paswrd VARCHAR(20),
+    idcard BLOB,
+    FOREIGN KEY (course_id) REFERENCES Course(course_id),
+    FOREIGN KEY (add_id) REFERENCES Address(add_id)
+);
+
+-- Exam Table
+CREATE TABLE Exam (
+    exam_id INT PRIMARY KEY AUTO_INCREMENT,
+    exam_name VARCHAR(100),
+    exam_course INT,
+    exam_subject INT,
+    created_by INT,
+    FOREIGN KEY (exam_course) REFERENCES Course(course_id),
+    FOREIGN KEY (exam_subject) REFERENCES Subject(sub_id),
+    FOREIGN KEY (created_by) REFERENCES Teacher(teacher_id)
+);
+
+-- Question Table
+CREATE TABLE Question (
+    ques_id INT PRIMARY KEY AUTO_INCREMENT,
+    exam_id INT,
+    ques_text TEXT,
+    FOREIGN KEY (exam_id) REFERENCES Exam(exam_id)
+);
+
+-- Option Table
+CREATE TABLE Option_ (
+    option_id INT PRIMARY KEY AUTO_INCREMENT,
+    ques_id INT,
+    option_text TEXT,
+    is_correct BOOLEAN,
+    FOREIGN KEY (ques_id) REFERENCES Question(ques_id)
+);
+
+-- Student Attempt
+CREATE TABLE student_exam (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    stu_id INT,
+    exam_id INT,
+    AttemptDate DATETIME,
+    FOREIGN KEY (stu_id) REFERENCES Student(stu_id),
+    FOREIGN KEY (exam_id) REFERENCES Exam(exam_id)
+);
+
+-- Student Answers
+CREATE TABLE student_ans (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    stu_id INT,
+    exam_id INT,
+    ques_id INT,
+    option_id INT,
+    is_correct BOOLEAN,
+    FOREIGN KEY (stu_id) REFERENCES Student(stu_id),
+    FOREIGN KEY (exam_id) REFERENCES Exam(exam_id),
+    FOREIGN KEY (ques_id) REFERENCES Question(ques_id),
+    FOREIGN KEY (option_id) REFERENCES Option_(option_id)
+);
+
+-- Student Result
+CREATE TABLE student_result (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    stu_id INT,
+    exam_id INT,
+    score INT,
+    createdate DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (stu_id) REFERENCES Student(stu_id),
+    FOREIGN KEY (exam_id) REFERENCES Exam(exam_id)
+);
+
+-- Stored Procedures
+
+DELIMITER $$
+
+-- Register Teacher
+CREATE PROCEDURE RegisterTeacher (
+    IN p_name VARCHAR(50),
+    IN p_email VARCHAR(50),
+    IN p_phno VARCHAR(20),
+    IN p_usrnm VARCHAR(20),
+    IN p_paswrd VARCHAR(20)
+)
+BEGIN
+    INSERT INTO Teacher (name, email, phno, usrnm, paswrd) 
+    VALUES (p_name, p_email, p_phno, p_usrnm, p_paswrd);
+END $$
+
+-- Register Student
+CREATE PROCEDURE RegisterStudent (
+    IN p_name VARCHAR(50),
+    IN p_qualification VARCHAR(50),
+    IN p_dob DATE,
+    IN p_course_id INT,
+    IN p_add_id INT,
+    IN p_phno VARCHAR(20),
+    IN p_usrnm VARCHAR(20),
+    IN p_paswrd VARCHAR(20)
+)
+BEGIN
+    INSERT INTO Student (name, qualification, dob, course_id, add_id, phno, usrnm, paswrd)
+    VALUES (p_name, p_qualification, p_dob, p_course_id, p_add_id, p_phno, p_usrnm, p_paswrd);
+END $$
+
+-- Create Exam
+CREATE PROCEDURE CreateExam (
+    IN p_exam_name VARCHAR(100),
+    IN p_exam_course INT,
+    IN p_exam_subject INT,
+    IN p_created_by INT
+)
+BEGIN
+    INSERT INTO Exam (exam_name, exam_course, exam_subject, created_by)
+    VALUES (p_exam_name, p_exam_course, p_exam_subject, p_created_by);
+END $$
+
+-- Add Question with Options
+CREATE PROCEDURE AddQuestionWithOptions (
+    IN p_exam_id INT,
+    IN p_ques_text TEXT,
+    IN p_opt1 TEXT, IN p_opt1_correct BOOLEAN,
+    IN p_opt2 TEXT, IN p_opt2_correct BOOLEAN,
+    IN p_opt3 TEXT, IN p_opt3_correct BOOLEAN,
+    IN p_opt4 TEXT, IN p_opt4_correct BOOLEAN
+)
+BEGIN
+    DECLARE last_ques_id INT;
+    INSERT INTO Question (exam_id, ques_text) VALUES (p_exam_id, p_ques_text);
+    SET last_ques_id = LAST_INSERT_ID();
+
+    INSERT INTO Option_ (ques_id, option_text, is_correct) VALUES
+    (last_ques_id, p_opt1, p_opt1_correct),
+    (last_ques_id, p_opt2, p_opt2_correct),
+    (last_ques_id, p_opt3, p_opt3_correct),
+    (last_ques_id, p_opt4, p_opt4_correct);
+END $$
+
+-- Attempt Exam
+CREATE PROCEDURE AttemptExam (
+    IN p_stu_id INT,
+    IN p_exam_id INT
+)
+BEGIN
+    INSERT INTO student_exam (stu_id, exam_id, AttemptDate)
+    VALUES (p_stu_id, p_exam_id, NOW());
+END $$
+
+-- Submit Answer
+CREATE PROCEDURE SubmitAnswer (
+    IN p_stu_id INT,
+    IN p_exam_id INT,
+    IN p_ques_id INT,
+    IN p_option_id INT
+)
+BEGIN
+    DECLARE isRight BOOLEAN;
+    SELECT is_correct INTO isRight FROM Option_ WHERE option_id = p_option_id;
+
+    INSERT INTO student_ans (stu_id, exam_id, ques_id, option_id, is_correct)
+    VALUES (p_stu_id, p_exam_id, p_ques_id, p_option_id, isRight);
+END $$
+
+-- Save Result
+CREATE PROCEDURE SaveResult (
+    IN p_stu_id INT,
+    IN p_exam_id INT
+)
+BEGIN
+    DECLARE total_score INT;
+    SELECT COUNT(*) INTO total_score FROM student_ans
+    WHERE stu_id = p_stu_id AND exam_id = p_exam_id AND is_correct = TRUE;
+
+    INSERT INTO student_result (stu_id, exam_id, score)
+    VALUES (p_stu_id, p_exam_id, total_score);
+END $$
+
+DELIMITER ;
+
+-- Dummy Data Inserts
+
+-- Address
+INSERT INTO Address (state, city, pin) VALUES ('UP', 'Noida', 201301);
+
+-- Course
+INSERT INTO Course (name, year, semester) VALUES ('BCA', 1, 2);
+
+-- Subject
+INSERT INTO Subject (name) VALUES ('DBMS');
+
+-- Register Teacher
+CALL RegisterTeacher('Amit Sir', 'amit@tmv.edu', '9999999999', 'amit_sir', 'pass123');
+
+-- Register Student
+CALL RegisterStudent('Raj Sharma', '12th', '2004-06-15', 1, 1, '8888888888', 'raj123', 'rajpass');
+
+-- Create Exam
+CALL CreateExam('DBMS Unit Test', 1, 1, 1);
+
+-- Add Questions
+CALL AddQuestionWithOptions(
+    1,
+    'What does SQL stand for?',
+    'Structured Query Language', TRUE,
+    'Simple Query Language', FALSE,
+    'Structured Question Language', FALSE,
+    'Standard Query Logic', FALSE
+);
+
+CALL AddQuestionWithOptions(
+    1,
+    'Which command is used to remove a table in SQL?',
+    'DELETE', FALSE,
+    'DROP', TRUE,
+    'REMOVE', FALSE,
+    'CLEAR', FALSE
+);
+
+-- Student Attempts Exam
+CALL AttemptExam(1, 1);
+
+-- Student Answers
+CALL SubmitAnswer(1, 1, 1, 1); -- correct
+CALL SubmitAnswer(1, 1, 2, 2); -- correct
+
+-- Save Result
+CALL SaveResult(1, 1);
+
+-- View All Results
+SELECT * FROM student_result;
